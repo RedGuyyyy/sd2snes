@@ -147,7 +147,7 @@ uint8_t get_snes_reset_state(void) {
     reset_flag = 1;
 
     if(!resbutton_prev) { /* push, reset tick-timer */
-      pushes++;
+      ++pushes;
       rising_ticks = getticks();
       if(pushes == 1) {
         first_detection = 1;
@@ -237,18 +237,18 @@ uint8_t snes_main_loop() {
       saveram_crc = calc_sram_crc(SRAM_SAVE_ADDR, romprops.ramsize_bytes, 1);
       sram_valid = sram_reliable();
       if(crc_valid && sram_valid) {
-        if(save_failed) didnotsave++;
+        if(save_failed) ++didnotsave;
         if(saveram_crc != saveram_crc_old) {
           if(samecount) {
             diffcount=1;
           } else {
-            diffcount++;
-            didnotsave++;
+            ++diffcount;
+            ++didnotsave;
           }
           samecount=0;
         }
         if(saveram_crc == saveram_crc_old) {
-          samecount++;
+          ++samecount;
         }
         if((diffcount>=1 && samecount==5) || (didnotsave > 50)) {
           perform_save = 1;
@@ -301,7 +301,7 @@ void get_selected_name(uint8_t* fn) {
   uint16_t count = sram_readstrn(fn, cwdaddr, 256);
   if(count && fn[count-1] != '/') {
     fn[count] = '/';
-    count++;
+    ++count;
   }
   sram_readstrn(fn+count, fdaddr+6+SRAM_MENU_ADDR, 256-count);
   /* restore hidden file extension */
@@ -404,7 +404,7 @@ uint32_t snescmd_readlong(uint16_t addr) {
 void snes_get_filepath(uint8_t *buffer, uint16_t length) {
   uint32_t path_address = snescmd_readlong(SNESCMD_MCU_PARAM);
   sram_readstrn(buffer, path_address, length-1);
-  printf("%s\n", buffer);
+  puts(buffer);
 }
 
 uint16_t snescmd_writeblock(void *buf, uint16_t addr, uint16_t size) {
@@ -429,7 +429,7 @@ uint16_t snescmd_readblock(void *buf, uint16_t addr, uint16_t size) {
 uint64_t snescmd_gettime(void) {
   fpga_set_snescmd_addr(SNESCMD_MCU_PARAM);
   uint8_t data[12];
-  for(int i=0; i<12; i++) {
+  for(int i=0; i<12; ++i) {
     data[11-i] = fpga_read_snescmd();
   }
   return srtctime2bcdtime(data);
@@ -445,11 +445,12 @@ void snescmd_prepare_nmihook() {
   // dumb O(n^2) byte match... but array is small
   unsigned count = 0;
   unsigned match_index = 0;
-  for (unsigned i = 0; i < sizeof(bram); i++) {
+  //strlen("bram_end")==8
+  for (unsigned i = 0; i < sizeof(bram); ++i) {
       if (bram[i] == "bram_end"[match_index]) {
-          match_index++;
-          if (match_index == strlen("bram_end")) {
-              count = i - strlen("bram_end") + 1;
+          ++match_index;
+          if (match_index == 8) {
+              count = i - 8 + 1;
               break;
           }
       }
@@ -458,7 +459,7 @@ void snescmd_prepare_nmihook() {
       }
   }
   
-  printf("bram count: %d\n", count);
+  printf("bram count: %u\n", count);
   snescmd_writeblock(bram, 0x2A04, count ? count : sizeof(bram));
 }
 
