@@ -43,7 +43,7 @@ uint32_t hdr_addr[6] = {0xffb0, 0x101b0, 0x7fb0, 0x81b0, 0x40ffb0, 0x4101b0};
 uint8_t isFixed(uint8_t* data, int size, uint8_t value) {
   uint8_t res = 1;
   do {
-    size--;
+    --size;
     if(data[size] != value) {
       res = 0;
     }
@@ -72,7 +72,7 @@ void smc_id(snes_romprops_t* props, uint8_t flags) {
   props->has_obc1 = 0;
   props->fpga_features = 0;
   props->fpga_conf = NULL;
-  for(uint8_t num = 0; num < 6; num++) {
+  for(uint8_t num = 0; num < 6; ++num) {
     score = smc_headerscore(hdr_addr[num], header, flags);
     printf("%d: offset = %lX; score = %d\n", num, hdr_addr[num], score); // */
     if(score>=maxscore) {
@@ -278,7 +278,7 @@ void smc_id(snes_romprops_t* props, uint8_t flags) {
       chk_size=file_handle.fsize-1;
     
       while(props->romsize_bytes < chk_size) {
-        header->romsize++;
+        ++(header->romsize);
         props->romsize_bytes <<= 1;
       }
     }
@@ -340,16 +340,16 @@ uint8_t smc_headerscore(uint32_t addr, snes_header_t* header, uint8_t flags) {
 
   score += 2*isFixed(&header->licensee, sizeof(header->licensee), 0x33);
   score += 4*checkChksum(header->cchk, header->chk);
-  if(header->carttype < 0x08) score++;
-  if(header->romsize < 0x10) score++;
-  if(header->ramsize < 0x08) score++;
-  if(header->destcode < 0x0e) score++;
+  if(header->carttype < 0x08) ++score;
+  if(header->romsize < 0x10) ++score;
+  if(header->ramsize < 0x08) ++score;
+  if(header->destcode < 0x0e) ++score;
   /* BS-X ROM type / run flags */
-  if(!(header->destcode & 0x40) && !(header->destcode & 0xf)) score++;
+  if(!(header->destcode & 0x40) && !(header->destcode & 0xf)) ++score;
   /* BS-X bytecode instead of 65c816 binary - vectors will be invalid */
   if(header->gamecode[0] == 0x00 && header->gamecode[1] == 0x01
      && header->gamecode[2] == 0x00 && header->gamecode[3] == 0x00) {
-    score++;
+    ++score;
     bsx_bytecode_adjust = 2;
   }
 

@@ -144,20 +144,20 @@ static uint32_t getbits(void *buffer, uint16_t start, int8_t bits) {
   uint8_t *buf = buffer;
   uint32_t result = 0;
 
-  if ((start % 8) != 0) {
+  if ((start & 7) != 0) {
     /* Unaligned start */
-    result += buf[start / 8] & (0xff >> (start % 8));
-    bits  -= 8 - (start % 8);
-    start += 8 - (start % 8);
+    result += buf[start >> 3] & (0xff >> (start & 7));
+    bits  -= 8 - (start & 7);
+    start += 8 - (start & 7);
   }
   while (bits >= 8) {
-    result = (result << 8) + buf[start / 8];
+    result = (result << 8) + buf[start >> 3];
     start += 8;
     bits -= 8;
   }
   if (bits > 0) {
     result = result << bits;
-    result = result + (buf[start / 8] >> (8-bits));
+    result = result + (buf[start >> 3] >> (8-bits));
   } else if (bits < 0) {
     /* Fraction of a single byte */
     result = result >> -bits;
@@ -226,7 +226,7 @@ int get_and_check_datacrc(uint8_t *buf) {
   uint8_t datdata;
   uint16_t datcnt;
   /* get crcs from card */
-  for (datcnt=0; datcnt < 16; datcnt++) {
+  for (datcnt=0; datcnt < 16; ++datcnt) {
     datdata = SD_DAT;
     wiggle_fast_neg1();
     sdcrc0 = ((sdcrc0 << 1) & 0xfffe) | ((datdata >> 3) & 0x0001);
@@ -236,12 +236,12 @@ int get_and_check_datacrc(uint8_t *buf) {
   }
   wiggle_fast_neg1();
   /* calc crcs from data */
-  for (datcnt=0; datcnt < 512; datcnt++) {
+  for (datcnt=0; datcnt < 512; ++datcnt) {
     d0 = ((d0 << 2) & 0xfc) | ((buf[datcnt] >> 6) & 0x02) | ((buf[datcnt] >> 3) & 0x01) ;
     d1 = ((d1 << 2) & 0xfc) | ((buf[datcnt] >> 5) & 0x02) | ((buf[datcnt] >> 2) & 0x01) ;
     d2 = ((d2 << 2) & 0xfc) | ((buf[datcnt] >> 4) & 0x02) | ((buf[datcnt] >> 1) & 0x01) ;
     d3 = ((d3 << 2) & 0xfc) | ((buf[datcnt] >> 3) & 0x02) | ((buf[datcnt] >> 0) & 0x01) ;
-    if((datcnt % 4) == 3) {
+    if((datcnt & 3) == 3) {
       crc0 = crc_xmodem_update(crc0, d0);
       crc1 = crc_xmodem_update(crc1, d1);
       crc2 = crc_xmodem_update(crc2, d2);
@@ -290,7 +290,7 @@ int send_command_slow(uint8_t* cmd, uint8_t* rsp){
   while(i--) {
     shift = 8;
     do {
-      shift--;
+      --shift;
       uint8_t data = *cmd;
       *cmd<<=1;
       if(data&0x80) {
@@ -300,7 +300,7 @@ int send_command_slow(uint8_t* cmd, uint8_t* rsp){
       }
       wiggle_slow_pos(1);
     } while (shift);
-    cmd++;
+    ++cmd;
   }
 
   wiggle_slow_pos(1);
@@ -321,12 +321,12 @@ int send_command_slow(uint8_t* cmd, uint8_t* rsp){
       shift = 8;
       uint8_t data=0;
       do {
-        shift--;
+        --shift;
         data |= (BITBAND(SD_CMDREG->FIOPIN, SD_CMDPIN)) << shift;
         wiggle_slow_neg(1);
       } while (shift);
       *rsp=data;
-      rsp++;
+      ++rsp;
     }
   }
   return rsplen;
@@ -366,7 +366,7 @@ int send_command_fast(uint8_t* cmd, uint8_t* rsp, uint8_t* buf){
       rsplen = 6;
   }
   if(dat && (buf==NULL) && !sd_offload) {
-    printf("send_command_fast error: buf is null but data transfer expected.\n");
+    puts("send_command_fast error: buf is null but data transfer expected.");
     return 0;
   }
   /* send command */
@@ -376,7 +376,7 @@ int send_command_fast(uint8_t* cmd, uint8_t* rsp, uint8_t* buf){
     uint8_t data = *cmd;
     cmdshift = 8;
     do {
-      cmdshift--;
+      --cmdshift;
       if(data&0x80) {
         BITBAND(SD_CMDREG->FIOSET, SD_CMDPIN) = 1;
       } else {
@@ -385,7 +385,7 @@ int send_command_fast(uint8_t* cmd, uint8_t* rsp, uint8_t* buf){
       data<<=1;
       wiggle_fast_pos1();
     } while (cmdshift);
-    cmd++;
+    ++cmd;
   }
 
   wiggle_fast_pos1();
@@ -408,20 +408,20 @@ int send_command_fast(uint8_t* cmd, uint8_t* rsp, uint8_t* buf){
       do {
         if(dat) {
           if(!(BITBAND(SD_DAT0REG->FIOPIN, SD_DAT0PIN))) {
-            printf("data start during response\n");
+            puts("data start during response");
             j=datcnt;
             state=CMD_RSPDAT;
             break;
           }
         }
-        cmdshift--;
+        --cmdshift;
         cmddata |= (BITBAND(SD_CMDREG->FIOPIN, SD_CMDPIN)) << cmdshift;
         wiggle_fast_neg1();
       } while (cmdshift);
       if(state==CMD_RSPDAT)break;
       *rsp=cmddata;
       cmddata=0;
-      rsp++;
+      ++rsp;
     }
 
     if(state==CMD_RSPDAT) { /* process response+data */
@@ -429,14 +429,14 @@ int send_command_fast(uint8_t* cmd, uint8_t* rsp, uint8_t* buf){
       DBG_SD printf("processing rsp+data cmdshift=%d i=%d j=%d\n", cmdshift, i, j);
       datshift=8;
       while(1) {
-        cmdshift--;
+        --cmdshift;
         cmddata |= (BITBAND(SD_CMDREG->FIOPIN, SD_CMDPIN)) << cmdshift;
         if(!cmdshift) {
           cmdshift=8;
           *rsp=cmddata;
           cmddata=0;
-          rsp++;
-          i--;
+          ++rsp;
+          --i;
           if(!i) {
             DBG_SD printf("response end\n");
             if(j) state=CMD_DAT; /* response over, remaining data */
@@ -450,8 +450,8 @@ int send_command_fast(uint8_t* cmd, uint8_t* rsp, uint8_t* buf){
             datshift=8;
             *buf=datdata;
             datdata=0;
-            buf++;
-            j--;
+            ++buf;
+            --j;
             if(!j) break;
           }
         }
@@ -466,13 +466,13 @@ int send_command_fast(uint8_t* cmd, uint8_t* rsp, uint8_t* buf){
       j=datcnt;
       datshift=8;
       timeout=2000000;
-      DBG_SD printf("response over, waiting for data...\n");
+      DBG_SD puts("response over, waiting for data...");
       /* wait for data start bit on DAT0 */
       while((BITBAND(SD_DAT0REG->FIOPIN, SD_DAT0PIN)) && --timeout) {
         wiggle_fast_neg1();
       }
 // printf("%ld\n", timeout);
-      if(!timeout) printf("timed out!\n");
+      if(!timeout) puts("timed out!");
       wiggle_fast_neg1(); /* eat the start bit */
       if(sd_offload) {
         if(sd_offload_partial) {
@@ -509,8 +509,8 @@ int send_command_fast(uint8_t* cmd, uint8_t* rsp, uint8_t* buf){
 
           *buf=datdata;
           datdata=0;
-          buf++;
-          j--;
+          ++buf;
+          --j;
           if(!j) break;
         }
       } else {
@@ -522,8 +522,8 @@ int send_command_fast(uint8_t* cmd, uint8_t* rsp, uint8_t* buf){
             datshift=8;
             *buf=datdata;
             datdata=0;
-            buf++;
-            j--;
+            ++buf;
+            --j;
             if(!j) break;
           }
           wiggle_fast_neg1();
@@ -542,7 +542,7 @@ int send_command_fast(uint8_t* cmd, uint8_t* rsp, uint8_t* buf){
     }
 
     if(waitbusy) {
-      DBG_SD printf("waitbusy after send_cmd\n");
+      DBG_SD puts("waitbusy after send_cmd");
       wait_busy();
     }
     state=CMD_RSP;
@@ -613,12 +613,12 @@ int stream_datablock(uint8_t *buf) {
   uint8_t datdata=0;
   uint32_t timeout=1000000;
 
-  DBG_SD printf("stream_datablock: wait for ready...\n");
+  DBG_SD puts("stream_datablock: wait for ready...");
   if(during_blocktrans != TRANS_MID) {
     while((BITBAND(SD_DAT0REG->FIOPIN, SD_DAT0PIN)) && --timeout) {
       wiggle_fast_neg1();
     }
-    DBG_SD if(!timeout) printf("timeout!\n");
+    DBG_SD if(!timeout) puts("timeout!");
     wiggle_fast_neg1(); /* eat the start bit */
   }
   if(sd_offload) {
@@ -644,8 +644,8 @@ int stream_datablock(uint8_t *buf) {
       wiggle_fast_neg1();
 
       *buf=datdata;
-      buf++;
-      j--;
+      ++buf;
+      --j;
       if(!j) break;
     }
 #ifdef CONFIG_SD_DATACRC
@@ -719,13 +719,13 @@ void send_datablock(uint8_t *buf) {
       dat2=0;
       dat3=0;
     }
-    buf++;
+    ++buf;
   }
 //  printf("crc0=%04x crc1=%04x crc2=%04x crc3=%04x ", crc0, crc1, crc2, crc3);
   /* send crcs */
   datshift=16;
   do {
-    datshift--;
+    --datshift;
     if((crc0 >> datshift) & 1) {
       BITBAND(SD_DAT0REG->FIOSET, SD_DAT0PIN) = 1;
     } else {
@@ -766,7 +766,7 @@ void send_datablock(uint8_t *buf) {
 
   datshift=4;
   do {
-    datshift--;
+    --datshift;
     dat0 |= ((BITBAND(SD_DAT0REG->FIOPIN, SD_DAT0PIN)) << datshift);
     wiggle_fast_neg1();
   } while (datshift);
@@ -899,7 +899,7 @@ DRESULT sdn_read(BYTE drv, BYTE *buffer, DWORD sector, UINT count) {
     return RES_PARERR;
   }
   readled(1);
-  for(sec=0; sec<count; sec++) {
+  for(sec=0; sec<count; ++sec) {
     read_block(sector+sec, buffer);
     buffer+=512;
   }
@@ -923,20 +923,20 @@ DSTATUS sdn_initialize(BYTE drv) {
   }
   /* if the card is sending data from before a reset we try to deselect it
      prior to initialization */
-  for(rsplen=0; rsplen<2042; rsplen++) {
+  for(rsplen=0; rsplen<2042; ++rsplen) {
     if(!(BITBAND(SD_DAT3REG->FIOPIN, SD_DAT3PIN))) {
       printf("card seems to be sending data, attempting deselect\n");
       cmd_slow(SELECT_CARD, 0, 0, NULL, rsp);
     }
     wiggle_slow_neg(1);
   }
-  printf("sd_init start\n");
+  puts("sd_init start");
   BITBAND(SD_DAT3REG->FIODIR, SD_DAT3PIN) = 1;
   BITBAND(SD_DAT3REG->FIOSET, SD_DAT3PIN) = 1;
   cmd_slow(GO_IDLE_STATE, 0, 0x95, NULL, rsp);
 
   if((rsplen=cmd_slow(SEND_IF_COND, 0x000001aa, 0x87, NULL, rsp))) {
-    DBG_SD printf("CMD8 response:\n");
+    DBG_SD puts("CMD8 response:");
     DBG_SD uart_trace(rsp, 0, rsplen);
     hcs=1;
   }
@@ -957,7 +957,7 @@ DSTATUS sdn_initialize(BYTE drv) {
     rca=(rsp[1]<<24) | (rsp[2]<<16);
     printf("RCA: %04lx\n", rca>>16);
   } else {
-    printf("CMD3 no response!\n");
+    puts("CMD3 no response!");
     rca=0;
   }
 
@@ -970,9 +970,9 @@ DSTATUS sdn_initialize(BYTE drv) {
 
   /* select the card */
   if(cmd_slow(SELECT_CARD, rca, 0, NULL, rsp)) {
-    printf("card selected!\n");
+    puts("card selected!");
   } else {
-    printf("CMD7 no response!\n");
+    puts("CMD7 no response!");
   }
 
   /* get card status */
@@ -1073,7 +1073,7 @@ DRESULT sdn_write(BYTE drv, const BYTE *buffer, DWORD sector, UINT count) {
     return RES_NOTRDY;
   }
   writeled(1);
-  for(sec=0; sec<count; sec++) {
+  for(sec=0; sec<count; ++sec) {
     write_block(sector+sec, buf);
     buf+=512;
   }
@@ -1107,7 +1107,7 @@ void sdn_gettacc(uint32_t *tacc_max, uint32_t *tacc_avg) {
   int sec_step = di.sectorcount / numread - 1;
   if(disk_state == DISK_REMOVED || usbint_server_busy()) return;
   sdn_checkinit(0);
-  for (i=0; i < 128; i++) {
+  for (i=0; i < 128; ++i) {
     sd_offload_tgt=2;
     sd_offload=1;
     sdn_read(0, NULL, 0, 1);
@@ -1115,7 +1115,7 @@ void sdn_gettacc(uint32_t *tacc_max, uint32_t *tacc_avg) {
     sd_offload=1;
     sdn_read(0, NULL, i*sec_step, 1);
   }
-  for (i=0; i < numread && (snes_get_mcu_cmd() == SNES_CMD_SYSINFO) && disk_state != DISK_REMOVED && !usbint_server_busy(); i++) {
+  for (i=0; i < numread && (snes_get_mcu_cmd() == SNES_CMD_SYSINFO) && disk_state != DISK_REMOVED && !usbint_server_busy(); ++i) {
   /* reset timer */
     LPC_RIT->RICTRL = 0;
     sd_offload_tgt=2;
